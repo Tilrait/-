@@ -47,4 +47,4 @@
     5. Отправляем изменения в GitHub (git push)
     6. Проверяем репозиторий на GitHub — проверяем изменения.
 
-    ![tarkov.jpg](https://github.com/Tilrait/-/blob/main/jpg/tarkov.jpg)
+![tarkov.jpg](https://github.com/Tilrait/-/blob/main/jpg/tarkov.jpg)
