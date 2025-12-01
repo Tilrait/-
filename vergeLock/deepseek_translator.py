@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Продвинутый переводчик технической документации с использованием DeepSeek API
 Поддерживает Markdown, сохраняет форматирование и терминологию
@@ -16,7 +15,6 @@ from dotenv import load_dotenv
 import markdown
 from bs4 import BeautifulSoup
 
-# Загружаем переменные окружения
 load_dotenv()
 
 class DeepSeekTranslator:
@@ -28,7 +26,6 @@ class DeepSeekTranslator:
             "Content-Type": "application/json"
         }
         
-        # Статистика
         self.stats = {
             'total_segments': 0,
             'translated_segments': 0,
@@ -36,7 +33,6 @@ class DeepSeekTranslator:
             'errors': 0
         }
         
-        # Кэш перевода
         self.translation_cache = {}
         
     def split_markdown_into_segments(self, content: str, max_segment_length: int = 1500) -> List[Dict]:
@@ -45,15 +41,12 @@ class DeepSeekTranslator:
         """
         segments = []
         
-        # Разбиваем по заголовкам
         lines = content.split('\n')
         current_segment = []
         current_header = None
         
         for line in lines:
-            # Проверяем, является ли строка заголовком
             if re.match(r'^#{1,6}\s+', line):
-                # Сохраняем предыдущий сегмент
                 if current_segment:
                     segments.append({
                         'type': 'text',
@@ -63,7 +56,6 @@ class DeepSeekTranslator:
                     })
                     current_segment = []
                 
-                # Обрабатываем заголовок
                 current_header = line
                 segments.append({
                     'type': 'header',
@@ -72,7 +64,6 @@ class DeepSeekTranslator:
                     'level': line.count('#')
                 })
             
-            # Проверяем на код блоки
             elif line.strip().startswith('```'):
                 if current_segment:
                     segments.append({
@@ -83,11 +74,9 @@ class DeepSeekTranslator:
                     })
                     current_segment = []
                 
-                # Начинаем код блок
                 code_block = [line]
                 in_code_block = True
                 
-                # Читаем до конца код блока
                 for next_line in lines[lines.index(line) + 1:]:
                     code_block.append(next_line)
                     if next_line.strip().startswith('```'):
@@ -99,7 +88,6 @@ class DeepSeekTranslator:
                     'original': '\n'.join(code_block)
                 })
             
-            # Проверяем на таблицы
             elif '|' in line and re.search(r'\|\s*:?-+:?\s*\|', line):
                 if current_segment:
                     segments.append({
@@ -110,12 +98,10 @@ class DeepSeekTranslator:
                     })
                     current_segment = []
                 
-                # Собираем таблицу
                 table_lines = [line]
                 table_index = lines.index(line)
                 
-                # Читаем строки таблицы
-                for i in range(1, 20):  # Максимум 20 строк таблицы
+                for i in range(1, 20):
                     if table_index + i < len(lines):
                         next_line = lines[table_index + i]
                         if '|' in next_line:
@@ -132,7 +118,6 @@ class DeepSeekTranslator:
             else:
                 current_segment.append(line)
         
-        # Добавляем последний сегмент
         if current_segment:
             segments.append({
                 'type': 'text',
@@ -141,7 +126,6 @@ class DeepSeekTranslator:
                 'original': '\n'.join(current_segment)
             })
         
-        # Объединяем маленькие сегменты
         merged_segments = []
         current_merge = []
         current_length = 0
@@ -150,7 +134,6 @@ class DeepSeekTranslator:
             seg_length = len(segment['content'])
             
             if segment['type'] in ['code', 'table']:
-                # Код и таблицы оставляем отдельно
                 if current_merge:
                     merged_segments.append(self._merge_segments(current_merge))
                     current_merge = []
@@ -192,16 +175,14 @@ class DeepSeekTranslator:
         """
         Создает глоссарий из текста, идентифицируя технические термины
         """
-        # Убираем код и специальные символы
-        clean_text = re.sub(r'`[^`]+`', '', text)  # inline код
-        clean_text = re.sub(r'```.*?```', '', clean_text, flags=re.DOTALL)  # код блоки
+        clean_text = re.sub(r'`[^`]+`', '', text)
+        clean_text = re.sub(r'```.*?```', '', clean_text, flags=re.DOTALL)
         
-        # Ищем потенциальные термины
         term_patterns = [
-            r'\b[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+\b',  # Составные русские термины
-            r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b',       # Составные английские термины
-            r'\b[а-яё]{6,}\b',                      # Длинные русские слова
-            r'\b[a-zA-Z]{6,}\b',                    # Длинные английские слова
+            r'\b[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+\b',
+            r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b',
+            r'\b[а-яё]{6,}\b',
+            r'\b[a-zA-Z]{6,}\b',
         ]
         
         terms = set()
@@ -209,7 +190,6 @@ class DeepSeekTranslator:
             matches = re.findall(pattern, clean_text, re.IGNORECASE)
             terms.update(matches)
         
-        # Фильтруем общие слова
         common_words = {
             'русский': ['который', 'которые', 'такой', 'такие', 'может', 'должен',
                        'имеет', 'имеют', 'можно', 'нужно', 'очень', 'будет',
@@ -226,13 +206,10 @@ class DeepSeekTranslator:
                 not any(word in term_lower for word in common_words['english'])):
                 filtered_terms.append(term)
         
-        # Берем топ N терминов
         top_terms = filtered_terms[:max_terms]
         
-        # Создаем глоссарий
         glossary = {}
         for term in top_terms:
-            # Пока оставляем перевод пустым, он будет заполнен позже
             glossary[term] = ""
         
         return glossary
@@ -242,12 +219,10 @@ class DeepSeekTranslator:
         """
         Переводит текст с использованием DeepSeek API с учетом глоссария и контекста
         """
-        # Проверяем кэш
         cache_key = hash(text)
         if cache_key in self.translation_cache:
             return self.translation_cache[cache_key], {'cached': True}
         
-        # Подготавливаем системный промпт
         system_prompt = """Ты профессиональный переводчик технической документации. 
 Твоя задача - точно переводить тексты с русского на английский, сохраняя:
 1. Техническую точность терминов
@@ -260,29 +235,25 @@ class DeepSeekTranslator:
 - Не переводи имена собственные, названия продуктов, переменные в коде
 - Будь консистентен в переводе терминов"""
         
-        # Добавляем глоссарий к промпту
         if glossary:
             glossary_text = "\nГлоссарий для перевода:\n"
             for rus, eng in glossary.items():
-                if eng:  # Если есть перевод в глоссарии
+                if eng:
                     glossary_text += f"{rus} → {eng}\n"
             system_prompt += glossary_text
         
-        # Добавляем контекст
         if context:
             system_prompt += f"\nКонтекст предыдущего раздела: {context[:500]}"
         
-        # Формируем сообщение для перевода
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Переведи следующий технический текст на английский, сохраняя всю разметку:\n\n{text}"}
         ]
         
-        # Параметры запроса
         payload = {
             "model": "deepseek-chat",
             "messages": messages,
-            "temperature": 0.1,  # Низкая температура для консистентности
+            "temperature": 0.1,
             "max_tokens": 4000,
             "stream": False
         }
@@ -295,13 +266,11 @@ class DeepSeekTranslator:
             result = response.json()
             translated_text = result['choices'][0]['message']['content']
             
-            # Обновляем статистику
             self.stats['total_segments'] += 1
             self.stats['translated_segments'] += 1
             if 'usage' in result:
                 self.stats['total_tokens'] += result['usage'].get('total_tokens', 0)
             
-            # Сохраняем в кэш
             self.translation_cache[cache_key] = translated_text
             
             return translated_text, result
@@ -318,37 +287,30 @@ class DeepSeekTranslator:
         """
         print(f"Начинаю перевод файла: {input_file}")
         
-        # Читаем исходный файл
         with open(input_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Загружаем глоссарий если есть
         glossary = {}
         if glossary_file and os.path.exists(glossary_file):
             with open(glossary_file, 'r', encoding='utf-8') as f:
                 glossary_data = json.load(f)
                 glossary = glossary_data.get('glossary', {})
         
-        # Разбиваем на сегменты
         segments = self.split_markdown_into_segments(content)
         print(f"Разбито на {len(segments)} сегментов")
         
-        # Переводим каждый сегмент
         translated_segments = []
         
         for i, segment in enumerate(segments, 1):
             print(f"Перевод сегмента {i}/{len(segments)}...")
             
             if segment['type'] in ['code', 'table']:
-                # Код и таблицы не переводим
                 translated_segments.append(segment['content'])
             else:
-                # Добавляем контекст из предыдущего сегмента
                 context = None
                 if i > 1 and translated_segments:
-                    context = translated_segments[-1][-1000:]  # Последние 1000 символов
+                    context = translated_segments[-1][-1000:]
                 
-                # Переводим текст
                 translated, _ = self.translate_with_deepseek(
                     segment['content'], 
                     glossary,
@@ -356,14 +318,11 @@ class DeepSeekTranslator:
                 )
                 translated_segments.append(translated)
             
-            # Пауза между запросами
             if i % 5 == 0:
                 time.sleep(1)
         
-        # Собираем переведенный документ
         translated_content = '\n\n'.join(translated_segments)
         
-        # Сохраняем результат
         if not output_file:
             output_file = Path(input_file).stem + '_translated.md'
         
@@ -377,7 +336,6 @@ class DeepSeekTranslator:
         print(f"   Всего токенов: {self.stats['total_tokens']}")
         print(f"   Ошибок: {self.stats['errors']}")
         
-        # Сохраняем статистику
         stats_file = Path(output_file).stem + '_stats.json'
         with open(stats_file, 'w', encoding='utf-8') as f:
             json.dump(self.stats, f, indent=2, ensure_ascii=False)
@@ -395,11 +353,9 @@ class DeepSeekTranslator:
         with open(translated_file, 'r', encoding='utf-8') as f:
             translated = f.read()
         
-        # Разбиваем на строки
         orig_lines = original.split('\n')
         trans_lines = translated.split('\n')
         
-        # Создаем двуязычный контент
         bilingual = []
         max_lines = max(len(orig_lines), len(trans_lines))
         
@@ -412,7 +368,6 @@ class DeepSeekTranslator:
                 bilingual.append(f"EN: {trans_line}")
                 bilingual.append("---")
         
-        # Сохраняем
         if not output_file:
             output_file = Path(original_file).stem + '_bilingual.md'
         
@@ -433,24 +388,20 @@ def main():
     
     args = parser.parse_args()
     
-    # Проверяем API ключ
     api_key = args.api_key or os.getenv('DEEPSEEK_API_KEY')
     if not api_key:
         print("❌ Ошибка: API ключ не найден")
         print("Добавьте ключ в .env файл или укажите через --api-key")
         return
     
-    # Создаем переводчик
     translator = DeepSeekTranslator(api_key)
     
-    # Выполняем перевод
     translated_file = translator.translate_markdown_file(
         args.input, 
         args.output,
         args.glossary
     )
     
-    # Создаем двуязычный файл если нужно
     if args.bilingual:
         translator.create_bilingual_file(args.input, translated_file)
 
